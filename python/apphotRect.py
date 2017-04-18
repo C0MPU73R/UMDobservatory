@@ -27,20 +27,26 @@ class ApertureSet(object):
     # apertures. Either way, we separate the apertures list out from
     # the individual image.
 
-    def __init__(self):
+    def __init__(self, perpendic=False):
+
+        # control variable
+        self.perpendic = perpendic
 
         # Some parameters for aperture construction
         self.rectWidth = 220.
         self.rectHeight = 90.
         self.rectTheta = np.radians(325.)
         
-
         # sky rectangles
         self.skyWidth = np.copy(self.rectWidth)
         self.skyHeight = np.copy(self.rectHeight)
 
         # sky nudge
         self.skyNudge = np.array([0., 30.])
+
+        if self.perpendic:
+            self.rectTheta = np.radians(55.)
+            self.skyNudge = np.array([120., 130.])
 
         # some default positions for apertures
         self.aperCens = np.array([])
@@ -58,6 +64,10 @@ class ApertureSet(object):
         vX = np.array([944., 892., 1105., 693., 1297.])
         vY = np.array([520., 446., 365., 592., 250.5])
 
+        if self.perpendic:
+            vX=np.array([960., 885., 1100., 772., 1285.])
+            vY=np.array([456., 509., 381., 588., 264.0 ]) 
+
         self.aperCens = np.vstack(( vX, vY ))
 
         # set up the sky apertures
@@ -65,7 +75,11 @@ class ApertureSet(object):
 
         # DO THE OFFSET HERE.
         self.skyCens[1] -= ( self.skyNudge[1] + self.skyHeight )
-        self.skyCens[1,0] += 2.0 * (self.skyNudge[1] + self.skyHeight)
+        self.skyCens[0] -= self.skyNudge[0]
+
+        if not self.perpendic:
+            self.skyCens[1,1] += 2.0 * (self.skyNudge[1] + self.skyHeight)
+        # self.skyCens[1,0] += 2.0 * (self.skyNudge[1] + self.skyHeight)
         
     def buildApertures(self):
 
@@ -251,11 +265,14 @@ class OneImage(object):
         plt.xlim(500., 1400.)
         plt.ylim(50., 750.)
 
+        plt.grid(which='both', color='0.2', alpha=0.25)
+
         # show colorbar
         #plt.colorbar()
 
 def TestDefaultApertures(Verbose=True, filOut='testPhot.csv', \
-                             writeInterval=50):
+                             writeInterval=50, perpendic=False, \
+                         doFew=False):
 
     """Tests setting up the source apertures and offsetting them for
     the sky"""
@@ -263,7 +280,15 @@ def TestDefaultApertures(Verbose=True, filOut='testPhot.csv', \
     # Testing on laptop: run from directory
     # /Users/clarkson/Data/UMD_Observatory/20170408/Aligned_R_Good
 
-    AS = ApertureSet()
+    # directory for plots
+    dirPlots = './tmpPlots'
+
+    # couple of control variables
+    if perpendic:
+        filOut='testPhot_perpendic.csv'
+        dirPlots='./tmpPlots_perp'
+
+    AS = ApertureSet(perpendic=perpendic)
     AS.setDefaultCenters()
     AS.buildApertures()
 
@@ -281,14 +306,18 @@ def TestDefaultApertures(Verbose=True, filOut='testPhot.csv', \
         return
 
     # directory for plots
-    dirPlots = './tmpPlots'
     if not os.access(dirPlots, os.R_OK):
         os.makedirs(dirPlots)
+
 
     # For testing the timing...
     t0 = time.time()
 
-    for iImg in range(len(LIms)):
+    nTodo = len(LIms)
+    if doFew:
+        nTodo = 3
+
+    for iImg in range(nTodo):
         pathImg = LIms[iImg]
         fileImg = os.path.split(pathImg)[-1]
         fileStem = os.path.splitext(fileImg)[0]
@@ -321,11 +350,11 @@ def TestDefaultApertures(Verbose=True, filOut='testPhot.csv', \
 
 
         if Verbose:
-            nImgs = np.float(len(LIms))
+            nImgs = np.float(nTodo)
             dt = time.time() - t0
             
             timePerRow = dt / np.float(iImg+1.)
-            timeLeft = timePerRow * np.float(nImgs - iImg)
+            timeLeft = timePerRow * np.float(nTodo - iImg)
 
             sys.stdout.write("\r %4i of %4i:: %5.2e per row, about %.2fs remain" % \
                                  (iImg, nImgs, timePerRow, timeLeft) )
@@ -340,9 +369,13 @@ def TestDefaultApertures(Verbose=True, filOut='testPhot.csv', \
         # will be for the plot...
         daysElapsed = IM.tRow['JD'] - tMaster['JD'][0]
         sTime = '%.3f' % (daysElapsed * 1440.)
-        plt.title('Time elapsed: %s min' % (sTime))
+        plt.title('Image %4s - time elapsed: %s min' \
+                  % (str(iImg).zfill(4), sTime))
 
         figName = 'APs_%s.jpg' % (fileStem)
+        if perpendic:
+            figName = 'APs_perp_%s.jpg' % (fileStem)
+
         pathFig = '%s/%s' % (dirPlots, figName)
         plt.savefig(pathFig)
 
